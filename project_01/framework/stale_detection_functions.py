@@ -1,9 +1,12 @@
-from drive_scripts import find_in_progress_records
+from drive_scripts import find_in_progress_records, update_in_process_records_to_pending_record
 from email_alerts import send_stale_process_alert
 from custom_logger import CustomLogger
 from typing import Dict, Any, List
 from datetime import datetime
 import pytz
+import re
+
+
 
 def detect_and_handle_stale_processes(config: Dict[str, Any], logger: CustomLogger) -> Dict[str, int]:
    """
@@ -68,10 +71,6 @@ def detect_and_handle_stale_processes(config: Dict[str, Any], logger: CustomLogg
    }
 
 
-
-# identify_stale_records, convert_to_pending
-import re
-
 def parse_duration_to_seconds(duration_str: str) -> int:
    """
    Parses duration string like "1d3h30m40s", "1d", "4h", "2h45m" to total seconds.
@@ -114,9 +113,6 @@ def parse_duration_to_seconds(duration_str: str) -> int:
        
    except Exception as e:
        raise ValueError(f"Failed to parse duration string '{duration_str}': {str(e)}")
-
-
-
 
 
 def identify_stale_records(list_of_python_dicts: List[Dict[str, Any]], config: Dict[str, Any], logger: CustomLogger) -> List[Dict[str, Any]]:
@@ -184,6 +180,302 @@ def identify_stale_records(list_of_python_dicts: List[Dict[str, Any]], config: D
 
 
 
+
+def convert_to_pending(stale_records: List[Dict[str, Any]], config: Dict[str, Any], logger: CustomLogger) -> int:
+   """
+   Converts stale records to pending status by updating the Python dictionaries.
+   
+   Args:
+       stale_records: List of stale record dictionaries
+       config: Configuration dictionary
+       logger: CustomLogger instance for logging
+       
+   Returns:
+       Number of records successfully converted to pending
+   """
+   
+   converted_count = 0
+   
+   for record in stale_records:
+       try:
+           # Phase 1: PRE_VALIDATION (always checked)
+           if record.get('PHASE_COMPLETED') is None or record.get('PHASE_COMPLETED') == '':
+               # Stuck in PRE_VALIDATION
+               record['PIPELINE_STATUS'] = 'PENDING'
+               record['PIPELINE_START_TIME'] = None
+               record['PIPELINE_END_TIME'] = None
+               record['PIPELINE_DURATION'] = None
+           else:
+               # Phase 2: SOURCE_TO_STAGE transfer (if enabled)
+               if record.get('SRC_STG_XFER_ENABLED') == True:
+                   if record.get('SRC_STG_XFER_STATUS') == 'IN_PROCESS':
+                       # Stuck in SRC_STG transfer
+                       record['SRC_STG_XFER_STATUS'] = 'PENDING'
+                       record['SRC_STG_XFER_START_TS'] = None
+                       record['SRC_STG_XFER_END_TS'] = None
+                       record['SRC_STG_XFER_DURATION'] = None
+                   else:
+                       # Phase 3: SOURCE_TO_STAGE audit (if enabled)
+                       if record.get('SRC_STG_AUDIT_ENABLED') == True:
+                           if record.get('SRC_STG_AUDIT_STATUS') == 'IN_PROCESS':
+                               # Stuck in SRC_STG audit
+                               record['SRC_STG_AUDIT_STATUS'] = 'PENDING'
+                               record['SRC_STG_AUDIT_START_TS'] = None
+                               record['SRC_STG_AUDIT_END_TS'] = None
+                               record['SRC_STG_AUDIT_DURATION'] = None
+                           else:
+                               # Phase 4: STAGE_TO_TARGET transfer (if enabled)
+                               if record.get('STG_TGT_XFER_ENABLED') == True:
+                                   if record.get('STG_TGT_XFER_STATUS') == 'IN_PROCESS':
+                                       # Stuck in STG_TGT transfer
+                                       record['STG_TGT_XFER_STATUS'] = 'PENDING'
+                                       record['STG_TGT_XFER_START_TS'] = None
+                                       record['STG_TGT_XFER_END_TS'] = None
+                                       record['STG_TGT_XFER_DURATION'] = None
+                                   else:
+                                       # Phase 5: STAGE_TO_TARGET audit (if enabled)
+                                       if record.get('STG_TGT_AUDIT_ENABLED') == True:
+                                           if record.get('STG_TGT_AUDIT_STATUS') == 'IN_PROCESS':
+                                               # Stuck in STG_TGT audit
+                                               record['STG_TGT_AUDIT_STATUS'] = 'PENDING'
+                                               record['STG_TGT_AUDIT_START_TS'] = None
+                                               record['STG_TGT_AUDIT_END_TS'] = None
+                                               record['STG_TGT_AUDIT_DURATION'] = None
+                                           else:
+                                               # Phase 6: SOURCE_TO_TARGET audit (if enabled)
+                                               if record.get('SRC_TGT_AUDIT_ENABLED') == True:
+                                                   if record.get('SRC_TGT_AUDIT_STATUS') == 'IN_PROCESS':
+                                                       # Stuck in SRC_TGT audit
+                                                       record['SRC_TGT_AUDIT_STATUS'] = 'PENDING'
+                                                       record['SRC_TGT_AUDIT_START_TS'] = None
+                                                       record['SRC_TGT_AUDIT_END_TS'] = None
+                                                       record['SRC_TGT_AUDIT_DURATION'] = None
+                                               # If SRC_TGT_AUDIT disabled, we're done
+                                       # If STG_TGT_AUDIT disabled, skip to SRC_TGT_AUDIT
+                                       else:
+                                           if record.get('SRC_TGT_AUDIT_ENABLED') == True:
+                                               if record.get('SRC_TGT_AUDIT_STATUS') == 'IN_PROCESS':
+                                                   record['SRC_TGT_AUDIT_STATUS'] = 'PENDING'
+                                                   record['SRC_TGT_AUDIT_START_TS'] = None
+                                                   record['SRC_TGT_AUDIT_END_TS'] = None
+                                                   record['SRC_TGT_AUDIT_DURATION'] = None
+                               # If STG_TGT_XFER disabled, skip to audits
+                               else:
+                                   if record.get('STG_TGT_AUDIT_ENABLED') == True:
+                                       if record.get('STG_TGT_AUDIT_STATUS') == 'IN_PROCESS':
+                                           record['STG_TGT_AUDIT_STATUS'] = 'PENDING'
+                                           record['STG_TGT_AUDIT_START_TS'] = None
+                                           record['STG_TGT_AUDIT_END_TS'] = None
+                                           record['STG_TGT_AUDIT_DURATION'] = None
+                                       else:
+                                           if record.get('SRC_TGT_AUDIT_ENABLED') == True:
+                                               if record.get('SRC_TGT_AUDIT_STATUS') == 'IN_PROCESS':
+                                                   record['SRC_TGT_AUDIT_STATUS'] = 'PENDING'
+                                                   record['SRC_TGT_AUDIT_START_TS'] = None
+                                                   record['SRC_TGT_AUDIT_END_TS'] = None
+                                                   record['SRC_TGT_AUDIT_DURATION'] = None
+                                   else:
+                                       if record.get('SRC_TGT_AUDIT_ENABLED') == True:
+                                           if record.get('SRC_TGT_AUDIT_STATUS') == 'IN_PROCESS':
+                                               record['SRC_TGT_AUDIT_STATUS'] = 'PENDING'
+                                               record['SRC_TGT_AUDIT_START_TS'] = None
+                                               record['SRC_TGT_AUDIT_END_TS'] = None
+                                               record['SRC_TGT_AUDIT_DURATION'] = None
+                       # If SRC_STG_AUDIT disabled, skip to STG_TGT_XFER
+                       else:
+                           if record.get('STG_TGT_XFER_ENABLED') == True:
+                               if record.get('STG_TGT_XFER_STATUS') == 'IN_PROCESS':
+                                   record['STG_TGT_XFER_STATUS'] = 'PENDING'
+                                   record['STG_TGT_XFER_START_TS'] = None
+                                   record['STG_TGT_XFER_END_TS'] = None
+                                   record['STG_TGT_XFER_DURATION'] = None
+                               else:
+                                   if record.get('STG_TGT_AUDIT_ENABLED') == True:
+                                       if record.get('STG_TGT_AUDIT_STATUS') == 'IN_PROCESS':
+                                           record['STG_TGT_AUDIT_STATUS'] = 'PENDING'
+                                           record['STG_TGT_AUDIT_START_TS'] = None
+                                           record['STG_TGT_AUDIT_END_TS'] = None
+                                           record['STG_TGT_AUDIT_DURATION'] = None
+                                       else:
+                                           if record.get('SRC_TGT_AUDIT_ENABLED') == True:
+                                               if record.get('SRC_TGT_AUDIT_STATUS') == 'IN_PROCESS':
+                                                   record['SRC_TGT_AUDIT_STATUS'] = 'PENDING'
+                                                   record['SRC_TGT_AUDIT_START_TS'] = None
+                                                   record['SRC_TGT_AUDIT_END_TS'] = None
+                                                   record['SRC_TGT_AUDIT_DURATION'] = None
+                                   else:
+                                       if record.get('SRC_TGT_AUDIT_ENABLED') == True:
+                                           if record.get('SRC_TGT_AUDIT_STATUS') == 'IN_PROCESS':
+                                               record['SRC_TGT_AUDIT_STATUS'] = 'PENDING'
+                                               record['SRC_TGT_AUDIT_START_TS'] = None
+                                               record['SRC_TGT_AUDIT_END_TS'] = None
+                                               record['SRC_TGT_AUDIT_DURATION'] = None
+                           else:
+                               # Both transfers disabled, check remaining audits
+                               if record.get('STG_TGT_AUDIT_ENABLED') == True:
+                                   if record.get('STG_TGT_AUDIT_STATUS') == 'IN_PROCESS':
+                                       record['STG_TGT_AUDIT_STATUS'] = 'PENDING'
+                                       record['STG_TGT_AUDIT_START_TS'] = None
+                                       record['STG_TGT_AUDIT_END_TS'] = None
+                                       record['STG_TGT_AUDIT_DURATION'] = None
+                                   else:
+                                       if record.get('SRC_TGT_AUDIT_ENABLED') == True:
+                                           if record.get('SRC_TGT_AUDIT_STATUS') == 'IN_PROCESS':
+                                               record['SRC_TGT_AUDIT_STATUS'] = 'PENDING'
+                                               record['SRC_TGT_AUDIT_START_TS'] = None
+                                               record['SRC_TGT_AUDIT_END_TS'] = None
+                                               record['SRC_TGT_AUDIT_DURATION'] = None
+                               else:
+                                   if record.get('SRC_TGT_AUDIT_ENABLED') == True:
+                                       if record.get('SRC_TGT_AUDIT_STATUS') == 'IN_PROCESS':
+                                           record['SRC_TGT_AUDIT_STATUS'] = 'PENDING'
+                                           record['SRC_TGT_AUDIT_START_TS'] = None
+                                           record['SRC_TGT_AUDIT_END_TS'] = None
+                                           record['SRC_TGT_AUDIT_DURATION'] = None
+               # If SRC_STG_XFER disabled, skip to SRC_STG_AUDIT or next phases
+               else:
+                   if record.get('SRC_STG_AUDIT_ENABLED') == True:
+                       if record.get('SRC_STG_AUDIT_STATUS') == 'IN_PROCESS':
+                           record['SRC_STG_AUDIT_STATUS'] = 'PENDING'
+                           record['SRC_STG_AUDIT_START_TS'] = None
+                           record['SRC_STG_AUDIT_END_TS'] = None
+                           record['SRC_STG_AUDIT_DURATION'] = None
+                       else:
+                           # Continue with STG_TGT phases...
+                           if record.get('STG_TGT_XFER_ENABLED') == True:
+                               if record.get('STG_TGT_XFER_STATUS') == 'IN_PROCESS':
+                                   record['STG_TGT_XFER_STATUS'] = 'PENDING'
+                                   record['STG_TGT_XFER_START_TS'] = None
+                                   record['STG_TGT_XFER_END_TS'] = None
+                                   record['STG_TGT_XFER_DURATION'] = None
+                               else:
+                                   if record.get('STG_TGT_AUDIT_ENABLED') == True:
+                                       if record.get('STG_TGT_AUDIT_STATUS') == 'IN_PROCESS':
+                                           record['STG_TGT_AUDIT_STATUS'] = 'PENDING'
+                                           record['STG_TGT_AUDIT_START_TS'] = None
+                                           record['STG_TGT_AUDIT_END_TS'] = None
+                                           record['STG_TGT_AUDIT_DURATION'] = None
+                                       else:
+                                           if record.get('SRC_TGT_AUDIT_ENABLED') == True:
+                                               if record.get('SRC_TGT_AUDIT_STATUS') == 'IN_PROCESS':
+                                                   record['SRC_TGT_AUDIT_STATUS'] = 'PENDING'
+                                                   record['SRC_TGT_AUDIT_START_TS'] = None
+                                                   record['SRC_TGT_AUDIT_END_TS'] = None
+                                                   record['SRC_TGT_AUDIT_DURATION'] = None
+                                   else:
+                                       if record.get('SRC_TGT_AUDIT_ENABLED') == True:
+                                           if record.get('SRC_TGT_AUDIT_STATUS') == 'IN_PROCESS':
+                                               record['SRC_TGT_AUDIT_STATUS'] = 'PENDING'
+                                               record['SRC_TGT_AUDIT_START_TS'] = None
+                                               record['SRC_TGT_AUDIT_END_TS'] = None
+                                               record['SRC_TGT_AUDIT_DURATION'] = None
+                           else:
+                               # Continue with remaining audits...
+                               if record.get('STG_TGT_AUDIT_ENABLED') == True:
+                                   if record.get('STG_TGT_AUDIT_STATUS') == 'IN_PROCESS':
+                                       record['STG_TGT_AUDIT_STATUS'] = 'PENDING'
+                                       record['STG_TGT_AUDIT_START_TS'] = None
+                                       record['STG_TGT_AUDIT_END_TS'] = None
+                                       record['STG_TGT_AUDIT_DURATION'] = None
+                                   else:
+                                       if record.get('SRC_TGT_AUDIT_ENABLED') == True:
+                                           if record.get('SRC_TGT_AUDIT_STATUS') == 'IN_PROCESS':
+                                               record['SRC_TGT_AUDIT_STATUS'] = 'PENDING'
+                                               record['SRC_TGT_AUDIT_START_TS'] = None
+                                               record['SRC_TGT_AUDIT_END_TS'] = None
+                                               record['SRC_TGT_AUDIT_DURATION'] = None
+                               else:
+                                   if record.get('SRC_TGT_AUDIT_ENABLED') == True:
+                                       if record.get('SRC_TGT_AUDIT_STATUS') == 'IN_PROCESS':
+                                           record['SRC_TGT_AUDIT_STATUS'] = 'PENDING'
+                                           record['SRC_TGT_AUDIT_START_TS'] = None
+                                           record['SRC_TGT_AUDIT_END_TS'] = None
+                                           record['SRC_TGT_AUDIT_DURATION'] = None
+                   else:
+                       # SRC_STG_AUDIT also disabled, continue with STG_TGT phases...
+                       if record.get('STG_TGT_XFER_ENABLED') == True:
+                           if record.get('STG_TGT_XFER_STATUS') == 'IN_PROCESS':
+                               record['STG_TGT_XFER_STATUS'] = 'PENDING'
+                               record['STG_TGT_XFER_START_TS'] = None
+                               record['STG_TGT_XFER_END_TS'] = None
+                               record['STG_TGT_XFER_DURATION'] = None
+                           else:
+                               if record.get('STG_TGT_AUDIT_ENABLED') == True:
+                                   if record.get('STG_TGT_AUDIT_STATUS') == 'IN_PROCESS':
+                                       record['STG_TGT_AUDIT_STATUS'] = 'PENDING'
+                                       record['STG_TGT_AUDIT_START_TS'] = None
+                                       record['STG_TGT_AUDIT_END_TS'] = None
+                                       record['STG_TGT_AUDIT_DURATION'] = None
+                                   else:
+                                       if record.get('SRC_TGT_AUDIT_ENABLED') == True:
+                                           if record.get('SRC_TGT_AUDIT_STATUS') == 'IN_PROCESS':
+                                               record['SRC_TGT_AUDIT_STATUS'] = 'PENDING'
+                                               record['SRC_TGT_AUDIT_START_TS'] = None
+                                               record['SRC_TGT_AUDIT_END_TS'] = None
+                                               record['SRC_TGT_AUDIT_DURATION'] = None
+                               else:
+                                   if record.get('SRC_TGT_AUDIT_ENABLED') == True:
+                                       if record.get('SRC_TGT_AUDIT_STATUS') == 'IN_PROCESS':
+                                           record['SRC_TGT_AUDIT_STATUS'] = 'PENDING'
+                                           record['SRC_TGT_AUDIT_START_TS'] = None
+                                           record['SRC_TGT_AUDIT_END_TS'] = None
+                                           record['SRC_TGT_AUDIT_DURATION'] = None
+                       else:
+                           # Most transfer phases disabled, check remaining audits
+                           if record.get('STG_TGT_AUDIT_ENABLED') == True:
+                               if record.get('STG_TGT_AUDIT_STATUS') == 'IN_PROCESS':
+                                   record['STG_TGT_AUDIT_STATUS'] = 'PENDING'
+                                   record['STG_TGT_AUDIT_START_TS'] = None
+                                   record['STG_TGT_AUDIT_END_TS'] = None
+                                   record['STG_TGT_AUDIT_DURATION'] = None
+                               else:
+                                   if record.get('SRC_TGT_AUDIT_ENABLED') == True:
+                                       if record.get('SRC_TGT_AUDIT_STATUS') == 'IN_PROCESS':
+                                           record['SRC_TGT_AUDIT_STATUS'] = 'PENDING'
+                                           record['SRC_TGT_AUDIT_START_TS'] = None
+                                           record['SRC_TGT_AUDIT_END_TS'] = None
+                                           record['SRC_TGT_AUDIT_DURATION'] = None
+                           else:
+                               if record.get('SRC_TGT_AUDIT_ENABLED') == True:
+                                   if record.get('SRC_TGT_AUDIT_STATUS') == 'IN_PROCESS':
+                                       record['SRC_TGT_AUDIT_STATUS'] = 'PENDING'
+                                       record['SRC_TGT_AUDIT_START_TS'] = None
+                                       record['SRC_TGT_AUDIT_END_TS'] = None
+                                       record['SRC_TGT_AUDIT_DURATION'] = None
+           
+           # Always update PIPELINE_STATUS and reset PIPELINE_START_TIME for all cases
+           record['PIPELINE_STATUS'] = 'PENDING'
+           record['PIPELINE_START_TIME'] = None
+           
+           # Increment retry_attempt_number
+           current_retry = record.get('RETRY_ATTEMPT_NUMBER', 0) or 0
+           record['RETRY_ATTEMPT_NUMBER'] = current_retry + 1
+           
+           converted_count += 1
+           
+       except Exception as e:
+           logger.error(
+               f"Failed to convert record to pending: {str(e)}",
+               keyword="CONVERT_TO_PENDING",
+               other_details={
+                   "error": str(e),
+                   "PIPELINE_ID": record.get('PIPELINE_ID', 'unknown'),
+                   "PIPELINE_NAME": record.get('PIPELINE_NAME', 'unknown'),
+                   "SOURCE_CATEGORY": record.get('SOURCE_CATEGORY', 'unknown'),
+                   "SOURCE_SUB_TYPE": record.get('SOURCE_SUB_TYPE', 'unknown')
+               }
+           )
+           continue
+   
+   # Update records in database
+   update_in_process_records_to_pending_record(stale_records, config, logger)
+   
+   logger.info(
+       f"Successfully converted {converted_count} records to pending status",
+       keyword="CONVERT_TO_PENDING"
+   )
+   
+   return converted_count
 
 
 
