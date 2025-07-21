@@ -31,16 +31,16 @@ The **drive_table** serves as a comprehensive monitoring, auditing, and alerting
 ### Data Extraction Parameters
 | Column Name | Data Type | Description |
 |-------------|-----------|-------------|
-| `query_target_day` | DATE | Target date for data processing - used in filters for incremental data collection |
-| `query_window_start_time` | TIMESTAMP | Start time filter applied to source data for incremental collection |
-| `query_window_end_time` | TIMESTAMP | End time filter applied to source data for incremental collection |
+| `query_target_day` | VARCHAR | Target date for data processing - used in filters for incremental data collection |
+| `query_window_start_time` | VARCHAR | Start time filter applied to source data for incremental collection (ISO string format) |
+| `query_window_end_time` | VARCHAR | End time filter applied to source data for incremental collection (ISO string format) |
 | `time_interval` | VARCHAR | Calculated duration (query_window_end_time - query_window_start_time). Format: "1d", "12h", "30m", "40s" |
 
 ### Record Audit Timestamps
 | Column Name | Data Type | Description |
 |-------------|-----------|-------------|
-| `record_first_inserted_time` | TIMESTAMP | When this monitoring record was first created in drive table - helps detect data manipulation |
-| `record_last_update_time` | TIMESTAMP | When this monitoring record was last modified - helps detect data manipulation |
+| `record_first_inserted_time` | VARCHAR | When this monitoring record was first created in drive table - helps detect data manipulation (ISO string format) |
+| `record_last_update_time` | VARCHAR | When this monitoring record was last modified - helps detect data manipulation (ISO string format) |
 
 ### Component Classification
 | Column Name | Data Type | Description |
@@ -65,8 +65,8 @@ The **drive_table** serves as a comprehensive monitoring, auditing, and alerting
 |-------------|-----------|-------------|
 | `src_stg_xfer_enabled` | BOOLEAN | Flag to skip process when data already transferred by other teams |
 | `src_stg_xfer_status` | VARCHAR | Execution state: "in_process", "completed", or "pending" |
-| `src_stg_xfer_start_ts` | TIMESTAMP | Actual process start time |
-| `src_stg_xfer_end_ts` | TIMESTAMP | Actual process end time |
+| `src_stg_xfer_start_ts` | VARCHAR | Actual process start time (ISO string format) |
+| `src_stg_xfer_end_ts` | VARCHAR | Actual process end time (ISO string format) |
 | `src_stg_xfer_duration` | VARCHAR | Time taken in readable format (1h, 30m, 45s, 1d) |
 | `src_stg_xfer_exp_duration` | VARCHAR | Expected/average duration for comparison and alerting |
 
@@ -75,8 +75,8 @@ The **drive_table** serves as a comprehensive monitoring, auditing, and alerting
 |-------------|-----------|-------------|
 | `stg_tgt_xfer_enabled` | BOOLEAN | Flag to skip process when data already transferred by other teams |
 | `stg_tgt_xfer_status` | VARCHAR | Execution state: "in_process", "completed", or "pending" |
-| `stg_tgt_xfer_start_ts` | TIMESTAMP | Actual process start time |
-| `stg_tgt_xfer_end_ts` | TIMESTAMP | Actual process end time |
+| `stg_tgt_xfer_start_ts` | VARCHAR | Actual process start time (ISO string format) |
+| `stg_tgt_xfer_end_ts` | VARCHAR | Actual process end time (ISO string format) |
 | `stg_tgt_xfer_duration` | VARCHAR | Time taken in readable format (1h, 30m, 45s, 1d) |
 | `stg_tgt_xfer_exp_duration` | VARCHAR | Expected/average duration for comparison and alerting |
 
@@ -85,8 +85,8 @@ The **drive_table** serves as a comprehensive monitoring, auditing, and alerting
 |-------------|-----------|-------------|
 | `src_stg_audit_enabled` | BOOLEAN | Flag to skip process when audit already performed by other teams |
 | `src_stg_audit_status` | VARCHAR | Execution state: "in_process", "completed", or "pending" |
-| `src_stg_audit_start_ts` | TIMESTAMP | Actual audit start time |
-| `src_stg_audit_end_ts` | TIMESTAMP | Actual audit end time |
+| `src_stg_audit_start_ts` | VARCHAR | Actual audit start time (ISO string format) |
+| `src_stg_audit_end_ts` | VARCHAR | Actual audit end time (ISO string format) |
 | `src_stg_audit_duration` | VARCHAR | Time taken in readable format (1h, 30m, 45s, 1d) |
 | `src_stg_audit_exp_duration` | VARCHAR | Expected/average duration for comparison and alerting |
 
@@ -95,8 +95,8 @@ The **drive_table** serves as a comprehensive monitoring, auditing, and alerting
 |-------------|-----------|-------------|
 | `stg_tgt_audit_enabled` | BOOLEAN | Flag to skip process when audit already performed by other teams |
 | `stg_tgt_audit_status` | VARCHAR | Execution state: "in_process", "completed", or "pending" |
-| `stg_tgt_audit_start_ts` | TIMESTAMP | Actual audit start time |
-| `stg_tgt_audit_end_ts` | TIMESTAMP | Actual audit end time |
+| `stg_tgt_audit_start_ts` | VARCHAR | Actual audit start time (ISO string format) |
+| `stg_tgt_audit_end_ts` | VARCHAR | Actual audit end time (ISO string format) |
 | `stg_tgt_audit_duration` | VARCHAR | Time taken in readable format (1h, 30m, 45s, 1d) |
 | `stg_tgt_audit_exp_duration` | VARCHAR | Expected/average duration for comparison and alerting |
 
@@ -104,6 +104,7 @@ The **drive_table** serves as a comprehensive monitoring, auditing, and alerting
 | Column Name | Data Type | Description |
 |-------------|-----------|-------------|
 | `source_count` | BIGINT | Record count at source stage - used for data integrity validation |
+| `avg_source_count` | BIGINT | Expected average source count to detect unexpected huge volume spikes |
 | `stage_count` | BIGINT | Record count at staging (may be skipped if counting takes too long) |
 | `target_count` | BIGINT | Record count at target stage - compared with source for validation |
 | `audit_result` | VARCHAR | Data integrity status: "matched" or "mismatched" based on count alignment |
@@ -115,15 +116,17 @@ The **drive_table** serves as a comprehensive monitoring, auditing, and alerting
 | Column Name | Data Type | Description |
 |-------------|-----------|-------------|
 | `phase_completed` | VARCHAR | Pipeline progress status: "source to stage complete", "stage to target complete", "audit completed" |
-| `pipeline_start_time` | TIMESTAMP | Overall pipeline execution start time |
-| `pipeline_end_time` | TIMESTAMP | Overall pipeline execution end time |
+| `pipeline_start_time` | VARCHAR | Overall pipeline execution start time (ISO string format) |
+| `pipeline_end_time` | VARCHAR | Overall pipeline execution end time (ISO string format) |
+| `pipeline_duration` | VARCHAR | Overall pipeline execution time in readable format (1h, 30m, 45s, 1d) |
+| `pipeline_exp_duration` | VARCHAR | Expected overall pipeline duration for comparison and alerting |
 | `retry_attempt_number` | INTEGER | Number of times this pipeline has been executed due to failures (connection errors, issues) |
 
 ### Alerting & Miscellaneous
 | Column Name | Data Type | Description |
 |-------------|-----------|-------------|
 | `email_alerts_send_to` | VARCHAR | List of email addresses that receive notifications when pipeline failures occur |
-| `miscellaneous_data` | JSON | Flexible field for additional information: error messages, user notes for managers, or any other data not covered by standard columns |
+| `miscellaneous_data` | VARIANT | Flexible field for additional information: error messages, user notes for managers, or any other data not covered by standard columns |
 
 ---
 
@@ -132,13 +135,15 @@ The **drive_table** serves as a comprehensive monitoring, auditing, and alerting
 ### For Monitoring Dashboards
 - Use `*_status` columns for real-time pipeline health visualization
 - Compare `*_duration` vs `*_exp_duration` for performance tracking and bottleneck identification
+- Compare `source_count` vs `avg_source_count` to identify volume anomalies and unexpected data spikes
 - Sort pipelines by `pipeline_priority` ASC for critical-first views
 - Track `retry_attempt_number` for stability metrics
 - Use `pipeline_parallel_thread_id` to monitor parallel execution performance
 
-### for Alerting Systems
+### For Alerting Systems
 - Trigger alerts on status = 'FAILED' or extended 'in_process' states
 - Alert when actual duration significantly exceeds expected duration
+- Alert when `source_count` significantly exceeds `avg_source_count` (e.g., >2x average) for volume spike detection
 - Escalate alerts faster for lower priority numbers (higher priority)
 - Monitor count discrepancies: source_count ≠ target_count indicates data corruption
 - Use `email_alerts_send_to` for notification routing
@@ -164,3 +169,13 @@ The **drive_table** serves as a comprehensive monitoring, auditing, and alerting
 3. **Priority-Based Processing**: Execute pipelines in ascending order of `pipeline_priority` values
 4. **Process Skipping**: When `*_enabled` = FALSE, skip that process step entirely
 5. **Continuity Validation**: Ensure no gaps in time window coverage through `continuity_check_performed`
+6. **Volume Anomaly Detection**: Monitor `source_count` vs `avg_source_count` for unexpected data volume changes
+
+**Key Updates Made:**
+- Added `avg_source_count` column in Data Quality & Validation section
+- Updated all timestamp fields to show VARCHAR with ISO string format
+- Added `pipeline_duration` and `pipeline_exp_duration` columns
+- Updated data types to match DDL (JSON → VARIANT)
+- Enhanced usage guidelines for volume anomaly detection
+- Added volume anomaly detection to Critical Data Handling Rules
+
