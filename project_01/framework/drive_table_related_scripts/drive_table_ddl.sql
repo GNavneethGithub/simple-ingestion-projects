@@ -80,6 +80,8 @@ CREATE TABLE IF NOT EXISTS drive_table (
     phase_completed VARCHAR(100) DEFAULT NULL,
     pipeline_start_time VARCHAR(50) DEFAULT NULL,
     pipeline_end_time VARCHAR(50) DEFAULT NULL,
+    pipeline_duration VARCHAR(50) DEFAULT NULL,
+    pipeline_exp_duration VARCHAR(50) DEFAULT NULL,
     retry_attempt_number INTEGER DEFAULT NULL,
     
     -- Alerting & Miscellaneous
