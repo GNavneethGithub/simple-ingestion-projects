@@ -1,10 +1,11 @@
-from drive_scripts import find_in_progress_records, update_in_process_records_to_pending_record
+from drive_scripts import find_in_progress_records, delete_old_in_process_record_and_insert_new_pending_record
 from email_alerts import send_stale_process_alert
 from custom_logger import CustomLogger
 from typing import Dict, Any, List
 from datetime import datetime
 import pytz
 import re
+import copy
 
 
 
@@ -41,7 +42,7 @@ def detect_and_handle_stale_processes(config: Dict[str, Any], logger: CustomLogg
    )
    
    # Identify stale records
-   stale_records: List[Dict[str, Any]] = identify_stale_records(in_progress_records, config)
+   stale_records: List[Dict[str, Any]] = identify_stale_records(in_progress_records, config, logger)
    
    # Log M stale records identified
    logger.info(
@@ -52,8 +53,17 @@ def detect_and_handle_stale_processes(config: Dict[str, Any], logger: CustomLogg
    
    # Send alert and convert stale records to pending
    if stale_records:
+       # Make deep copy of original stale records before modification
+       original_stale_records: List[Dict[str, Any]] = copy.deepcopy(stale_records)
+       
+       logger.info(
+           f"Created deep copy of {len(original_stale_records)} stale records for database operations",
+           keyword="STALE_RECORDS_COPY_CREATED",
+           other_details={"original_records_count": len(original_stale_records)}
+       )
+       
        send_stale_process_alert(stale_records, config)
-       converted_count: int = convert_to_pending(stale_records, config)
+       converted_count: int = convert_to_pending(stale_records, original_stale_records, config, logger)
        
        # Log M records converted to pending
        logger.info(
@@ -181,12 +191,13 @@ def identify_stale_records(list_of_python_dicts: List[Dict[str, Any]], config: D
 
 
 
-def convert_to_pending(stale_records: List[Dict[str, Any]], config: Dict[str, Any], logger: CustomLogger) -> int:
+def convert_to_pending(stale_records: List[Dict[str, Any]], original_stale_records: List[Dict[str, Any]], config: Dict[str, Any], logger: CustomLogger) -> int:
    """
    Converts stale records to pending status by updating the Python dictionaries.
    
    Args:
-       stale_records: List of stale record dictionaries
+       stale_records: List of stale record dictionaries (will be modified in-place)
+       original_stale_records: Deep copy of original stale records (for database DELETE operation)
        config: Configuration dictionary
        logger: CustomLogger instance for logging
        
@@ -467,8 +478,8 @@ def convert_to_pending(stale_records: List[Dict[str, Any]], config: Dict[str, An
            )
            continue
    
-   # Update records in database
-   update_in_process_records_to_pending_record(stale_records, config, logger)
+   # Delete old records and insert new pending records in database
+   delete_old_in_process_records_and_insert_new_pending_record(original_stale_records, stale_records, config, logger)
    
    logger.info(
        f"Successfully converted {converted_count} records to pending status",
@@ -478,6 +489,106 @@ def convert_to_pending(stale_records: List[Dict[str, Any]], config: Dict[str, An
    return converted_count
 
 
+
+
+
+
+
+def delete_old_in_process_records_and_insert_new_pending_record(original_stale_records: List[Dict[str, Any]], updated_stale_records: List[Dict[str, Any]], config: Dict[str, Any], logger: CustomLogger) -> int:
+    """
+    Deletes old in-process records and inserts new pending records in the database.
+    
+    Args:
+        original_stale_records: List of original stale record dictionaries (for DELETE operation)
+        updated_stale_records: List of updated stale record dictionaries (for INSERT operation)
+        config: Configuration dictionary containing database connection info
+        logger: CustomLogger instance for logging
+        
+    Returns:
+        Number of records successfully processed (deleted and inserted)
+    """
+    
+    if not original_stale_records or not updated_stale_records:
+        logger.info(
+            "No stale records to process in database",
+            keyword="DELETE_INSERT_RECORDS",
+            other_details={
+                "original_records_count": len(original_stale_records) if original_stale_records else 0,
+                "updated_records_count": len(updated_stale_records) if updated_stale_records else 0
+            }
+        )
+        return 0
+    
+    if len(original_stale_records) != len(updated_stale_records):
+        raise ValueError(f"Mismatch in record counts: original={len(original_stale_records)}, updated={len(updated_stale_records)}")
+    
+    logger.info(
+        f"Starting DELETE and INSERT operations for {len(original_stale_records)} stale records",
+        keyword="DELETE_INSERT_RECORDS_START",
+        other_details={"total_records": len(original_stale_records)}
+    )
+    
+    successfully_processed = 0
+    failed_operations = 0
+    
+    for i, (original_record, updated_record) in enumerate(zip(original_stale_records, updated_stale_records), 1):
+        try:
+            logger.info(
+                f"Processing record {i}/{len(original_stale_records)} - DELETE old and INSERT new",
+                keyword="DELETE_INSERT_SINGLE_RECORD_START",
+                other_details={
+                    "record_number": i,
+                    "total_records": len(original_stale_records),
+                    "PIPELINE_ID": original_record.get('PIPELINE_ID', 'unknown'),
+                    "PIPELINE_NAME": original_record.get('PIPELINE_NAME', 'unknown')
+                }
+            )
+            
+            # Call the single record function
+            delete_old_in_process_record_and_insert_new_pending_record(original_record, updated_record, config, logger)
+            
+            successfully_processed += 1
+            
+            logger.info(
+                f"Successfully processed record {i}/{len(original_stale_records)}",
+                keyword="DELETE_INSERT_SINGLE_RECORD_SUCCESS",
+                other_details={
+                    "record_number": i,
+                    "PIPELINE_ID": original_record.get('PIPELINE_ID', 'unknown')
+                }
+            )
+            
+        except Exception as e:
+            failed_operations += 1
+            
+            logger.error(
+                f"Failed to process record {i}/{len(original_stale_records)}: {str(e)}",
+                keyword="DELETE_INSERT_SINGLE_RECORD_FAILED",
+                other_details={
+                    "record_number": i,
+                    "error": str(e),
+                    "PIPELINE_ID": original_record.get('PIPELINE_ID', 'unknown'),
+                    "PIPELINE_NAME": original_record.get('PIPELINE_NAME', 'unknown'),
+                    "SOURCE_CATEGORY": original_record.get('SOURCE_CATEGORY', 'unknown'),
+                    "SOURCE_SUB_TYPE": original_record.get('SOURCE_SUB_TYPE', 'unknown')
+                }
+            )
+            # Continue with next record instead of stopping the whole batch
+            continue
+    
+    # Log final results
+    logger.info(
+        f"DELETE and INSERT operations completed: {successfully_processed} successful, {failed_operations} failed",
+        keyword="DELETE_INSERT_RECORDS_COMPLETE",
+        other_details={
+            "total_records": len(original_stale_records),
+            "successful_operations": successfully_processed,
+            "failed_operations": failed_operations,
+            "success_rate": round((successfully_processed / len(original_stale_records)) * 100, 2) if len(original_stale_records) > 0 else 0
+        }
+    )
+    
+    return successfully_processed
 
 
 
