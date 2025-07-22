@@ -1,7 +1,12 @@
+import re
+import pytz
+from contextlib import contextmanager
+from datetime import datetime, timedelta
+from typing import Dict, Any, List, Optional
+
 import snowflake.connector
 from snowflake.connector import DictCursor
-from typing import Dict, Any, List, Optional
-from contextlib import contextmanager
+
 from custom_logger import CustomLogger
 
 
@@ -632,6 +637,187 @@ def update_in_process_single_record_to_pending_record(stale_record: Dict[str, An
     
     print(f"DEBUG: update_in_process_single_record_to_pending_record completed")
     pass
+
+
+def parse_duration_string_to_seconds(duration_string: str) -> int:
+    """
+    Safely converts duration strings like '2d3h9s' to total seconds.
+    Accepts units: d (days), h (hours), m (minutes), s (seconds).
+
+    Ignores unsupported units like 'w' or malformed patterns.
+
+    Args:
+        duration_string (str): Duration string (e.g., '2d3h9s', '6000s').
+
+    Returns:
+        int: Total number of seconds.
+
+    Raises:
+        ValueError: If no valid duration units are found.
+    """
+    print(f"DEBUG: parse_duration_string_to_seconds() called with: {duration_string}")
+
+    if not isinstance(duration_string, str):
+        raise ValueError(f"Invalid type for duration string: {type(duration_string)}. Expected str.")
+
+    total_seconds = 0
+    valid_unit_found = False
+
+    pattern_map = {
+        'd': 86400,
+        'h': 3600,
+        'm': 60,
+        's': 1
+    }
+
+    try:
+        for unit, multiplier in pattern_map.items():
+            match = re.search(fr"(\d+){unit}", duration_string)
+            if match:
+                value = int(match.group(1))
+                seconds = value * multiplier
+                total_seconds += seconds
+                valid_unit_found = True
+                print(f"  Parsed {value}{unit} → {seconds} seconds")
+
+        if not valid_unit_found:
+            raise ValueError(f"No valid time units (d/h/m/s) found in string: '{duration_string}'")
+
+        print(f"DEBUG: Total seconds parsed = {total_seconds}")
+        return total_seconds
+
+    except Exception as e:
+        print(f"ERROR: Failed to parse duration string: '{duration_string}' | Exception: {str(e)}")
+        raise
+
+
+def get_valid_pending_records(config: Dict[str, Any], logger: CustomLogger) -> List[Dict[str, Any]]:
+    """
+    Fetches valid PENDING records based on QUERY_WINDOW time constraints.
+
+    Criteria:
+    - PIPELINE_STATUS = 'PENDING'
+    - CONTINUITY_CHECK_PERFORMED = 'YES'
+    - CAN_FETCH_HISTORICAL_DATA = 'YES'
+    - QUERY_WINDOW_START_TIME and END_TIME <= MAX_ACCEPTED_TIME
+
+    MAX_ACCEPTED_TIME = now(timezone) - (x_time_back + granularity)
+
+    Args:
+        config (Dict[str, Any]): Configuration dictionary
+        logger (CustomLogger): Logger for critical events
+
+    Returns:
+        List[Dict[str, Any]]: List of valid PENDING records
+    """
+
+    print("DEBUG: get_valid_pending_records() called")
+    print(f"DEBUG: config keys = {list(config.keys())}")
+
+    # Extract and validate critical config values
+    try:
+        timezone_str = config.get("timezone", "UTC")
+        tz = pytz.timezone(timezone_str)
+        print(f"DEBUG: timezone set to {timezone_str}")
+    except Exception as e:
+        print(f"ERROR: Invalid timezone in config: {str(e)}")
+        raise
+
+    try:
+        x_time_back_str = config["x_time_back"]
+        granularity_str = config["granularity"]
+        print(f"DEBUG: x_time_back = {x_time_back_str}, granularity = {granularity_str}")
+
+        x_time_back_seconds = parse_duration_string_to_seconds(x_time_back_str)
+        granularity_seconds = parse_duration_string_to_seconds(granularity_str)
+
+        total_offset_seconds = x_time_back_seconds + granularity_seconds
+        now = datetime.now(tz)
+        max_accepted_time = now - timedelta(seconds=total_offset_seconds)
+        print(f"DEBUG: MAX_ACCEPTED_TIME = {max_accepted_time.isoformat()}")
+
+    except Exception as e:
+        print(f"ERROR: Failed to calculate MAX_ACCEPTED_TIME: {str(e)}")
+        raise
+
+    # Prepare SQL
+    table_name = config["sf_drive_config"]["table"]
+    max_pending_records = config["max_pending_records"]
+    query = f"""
+    SELECT * FROM {table_name}
+    WHERE 
+        PIPELINE_STATUS = %(PIPELINE_STATUS)s 
+        AND CONTINUITY_CHECK_PERFORMED = 'YES' 
+        AND CAN_FETCH_HISTORICAL_DATA = 'YES' 
+        AND PIPELINE_NAME = %(PIPELINE_NAME)s
+        AND SOURCE_NAME = %(SOURCE_NAME)s
+        AND SOURCE_CATEGORY = %(SOURCE_CATEGORY)s 
+        AND SOURCE_SUB_TYPE = %(SOURCE_SUB_TYPE)s
+        AND QUERY_WINDOW_START_TIME <= %(MAX_ACCEPTED_TIME)s
+    ORDER BY QUERY_WINDOW_START_TIME ASC
+    LIMIT {max_pending_records}
+    """
+    # AND QUERY_WINDOW_END_TIME <= %(MAX_ACCEPTED_TIME)s
+
+    params = {
+        'PIPELINE_STATUS': 'PENDING',
+        'PIPELINE_NAME': config['PIPELINE_NAME'],
+        'SOURCE_NAME': config['SOURCE_NAME'],
+        'SOURCE_CATEGORY': config['SOURCE_CATEGORY'],
+        'SOURCE_SUB_TYPE': config['SOURCE_SUB_TYPE'],
+        'MAX_ACCEPTED_TIME': max_accepted_time
+    }
+
+    print("DEBUG: SQL and params ready. Executing query...")
+
+    print("\nQuery Parameters:")
+    for k, v in params.items():
+        print(f"  {k} = {v}  (type: {type(v)})")
+
+    print("\nFormatted SQL for manual testing:")
+    formatted_query = query
+    for key, val in params.items():
+        raw_val = f"'{val}'" if isinstance(val, str) else f"TO_TIMESTAMP('{val.isoformat()}')" if isinstance(val, datetime) else str(val)
+        formatted_query = formatted_query.replace(f"%({key})s", raw_val)
+    print(formatted_query)
+
+    try:
+        with get_snowflake_connection(config["sf_drive_config"], logger) as conn:
+            with conn.cursor(DictCursor) as cursor:
+                cursor.execute(query, params)
+                results = cursor.fetchall()
+
+                print(f"DEBUG: Query executed. Records found = {len(results)} | Query ID: {cursor.sfqid}")
+                logger.info(
+                    "Fetched valid PENDING records successfully",
+                    keyword="FETCH_VALID_PENDING_SUCCESS",
+                    other_details={
+                        "query_id": cursor.sfqid,
+                        "records_found": len(results)
+                    }
+                )
+                return results
+
+    except Exception as e:
+        print(f"ERROR: Failed to fetch valid pending records: {str(e)}")
+        logger.error(
+            "Exception while fetching valid pending records",
+            keyword="FETCH_VALID_PENDING_FAILED",
+            other_details={
+                "exception_type": type(e).__name__,
+                "exception_message": str(e),
+                "table_name": table_name
+            }
+        )
+        raise
+
+
+
+
+
+
+
+
 
 
 
