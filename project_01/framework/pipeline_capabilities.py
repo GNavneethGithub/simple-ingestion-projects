@@ -284,3 +284,8 @@ def determine_pipeline_capabilities(config: Dict[str, Any], logger: CustomLogger
         'can_process_source_to_stage': can_do_source_to_stage,
         'can_process_stage_to_target': can_do_stage_to_target
     }
+
+
+
+
+
