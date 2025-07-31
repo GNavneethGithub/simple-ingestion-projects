@@ -165,10 +165,10 @@ def determine_pipeline_capabilities(config: Dict[str, Any], logger: CustomLogger
     connection_status = check_all_connections(config, logger)
     
     # Extract individual connection flags
-    drive_available = connection_status.get('is_drive_connection_available', False)
-    source_available = connection_status.get('is_source_connection_available', False)
-    stage_available = connection_status.get('is_stage_connection_available', False)
-    target_available = connection_status.get('is_target_connection_available', False)
+    drive_available   = connection_status.get('is_drive_connection_available', False)
+    source_available  = connection_status.get('is_source_connection_available', False)
+    stage_available   = connection_status.get('is_stage_connection_available', False)
+    target_available  = connection_status.get('is_target_connection_available', False)
     
     # Get DAG run ID for messaging
     dag_run_id = config.get('dag_run_id', 'UNKNOWN')

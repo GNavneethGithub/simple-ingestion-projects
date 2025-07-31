@@ -1,5 +1,6 @@
 import re
 import pytz
+import json
 from contextlib import contextmanager
 from datetime import datetime, timedelta
 from typing import Dict, Any, List, Optional
@@ -30,7 +31,7 @@ def validate_sf_config(sf_config: Dict[str, Any]) -> None:
 def validate_pipeline_id(pipeline_id: Optional[str]) -> str:
     """Validate PIPELINE_ID is not None, empty, or whitespace."""
     print(f"DEBUG: validate_pipeline_id() called")
-    print(f"DEBUG: pipeline_id: {pipeline_id} | datatype: {type(pipeline_id)}")
+    print(f"DEBUG: pipeline_id: {pipeline_id}")
     
     if pipeline_id is None:
         error_msg = "PIPELINE_ID cannot be None, empty, or whitespace"
@@ -55,7 +56,7 @@ def validate_pipeline_id(pipeline_id: Optional[str]) -> str:
 def validate_config_structure(config: Dict[str, Any]) -> None:
     """Validate main config has required structure."""
     print(f"DEBUG: validate_config_structure() called")
-    print(f"DEBUG: config: {type(config)}")
+    #  print(f"DEBUG: config: {type(config)}")
     
     if "sf_drive_config" not in config:
         print(f"DEBUG: config_keys: {list(config.keys())} | datatype: {type(config.keys())}")
@@ -134,16 +135,22 @@ def get_snowflake_connection(sf_config: Dict[str, Any], logger: CustomLogger):
 
 
 def find_in_process_records(config: Dict[str, Any], logger: CustomLogger) -> List[Dict[str, Any]]:
-    """Finds all records with in_process status from drive table."""
+    """Finds all records with in_process status from drive table.
+       whose 
+       CONTINUITY_CHECK_PERFORMED = 'YES' 
+       and
+       CAN_FETCH_HISTORICAL_DATA = 'YES' 
+       are must
+      """
     print(f"DEBUG: find_in_process_records() called")
-    print(f"DEBUG: config: {type(config)} | logger: {type(logger)}")
+    #  print(f"DEBUG: config: {type(config)}")
     
     validate_config_structure(config)
     
     sf_config = config["sf_drive_config"]
     table_name = sf_config["table"]
     
-    print(f"DEBUG: table_name: {table_name} | datatype: {type(table_name)}")
+    print(f"DEBUG: table_name: {table_name} ")
     
     # Build query directly in function - no need to separate
     query = f"""
@@ -158,7 +165,7 @@ def find_in_process_records(config: Dict[str, Any], logger: CustomLogger) -> Lis
     AND SOURCE_SUB_TYPE = %(SOURCE_SUB_TYPE)s
     ORDER BY QUERY_WINDOW_START_TIME ASC
     """
-    
+
     # Build params directly in function - no need to separate
     params = {
         'PIPELINE_STATUS': 'IN_PROCESS',
@@ -167,7 +174,8 @@ def find_in_process_records(config: Dict[str, Any], logger: CustomLogger) -> Lis
         'SOURCE_CATEGORY': config['SOURCE_CATEGORY'],
         'SOURCE_SUB_TYPE': config['SOURCE_SUB_TYPE']
     }
-    
+    print(f"DEBUG: Query : \n {query}")
+    print(f"DEBUG: Params : \n {params}")
     print(f"DEBUG: Query and params built successfully")
     
     try:
@@ -195,10 +203,11 @@ def find_in_process_records(config: Dict[str, Any], logger: CustomLogger) -> Lis
             other_details={
                 "exception_type": str(type(e)),
                 "exception_message": str(e),
-                "table_name": f"value: {table_name} | datatype: {type(table_name)}",
+                "table_name": f"value: {table_name} ",
                 "query": query,
-                "params": {k: f"value: {v} | datatype: {type(v)}" for k, v in params.items()},
-                "sf_config_keys": [k for k in sf_config.keys() if k != 'password']
+                # "params": {k: f"value: {v} | datatype: {type(v)}" for k, v in params.items()},
+                "params": params,
+                "sf_config_keys":  {k: ('******' if k == 'password' else f"value: {v}") for k, v in sf_config.items()}
             }
         )
         print(f"DEBUG: find_in_process_records failed - exception: {str(e)} | datatype: {type(e)}")
@@ -208,8 +217,8 @@ def find_in_process_records(config: Dict[str, Any], logger: CustomLogger) -> Lis
 def get_record_before_delete(conn, table_name: str, pipeline_id: str, logger: CustomLogger) -> Dict[str, Any]:
     """Fetch and log the record before deletion for recovery purposes."""
     print(f"DEBUG: get_record_before_delete() called")
-    print(f"DEBUG: table_name: {table_name} | datatype: {type(table_name)}")
-    print(f"DEBUG: pipeline_id: {pipeline_id} | datatype: {type(pipeline_id)}")
+    print(f"DEBUG: table_name: {table_name}")
+    print(f"DEBUG: pipeline_id: {pipeline_id}")
     
     select_query = f"SELECT * FROM {table_name} WHERE PIPELINE_ID = %(PIPELINE_ID)s"
     select_params = {'PIPELINE_ID': pipeline_id}
@@ -227,15 +236,15 @@ def get_record_before_delete(conn, table_name: str, pipeline_id: str, logger: Cu
                     f"No record found for deletion - PIPELINE_ID: {pipeline_id}",
                     keyword="DELETE_RECORD_NOT_FOUND",
                     other_details={
-                        "pipeline_id": f"value: {pipeline_id} | datatype: {type(pipeline_id)}",
-                        "table_name": f"value: {table_name} | datatype: {type(table_name)}",
+                        "pipeline_id": pipeline_id,
+                        "table_name": table_name,
                         "query_id": cursor.sfqid,
                         "records_found": len(records),
-                        "select_query": select_query
+                        "select_query": f"SELECT * FROM {table_name} WHERE PIPELINE_ID = {pipeline_id}"
                     }
                 )
                 error_msg = f"No record found with PIPELINE_ID: {pipeline_id} - cannot delete non-existent record"
-                print(f"DEBUG: {error_msg}")
+                # print(f"DEBUG: {error_msg}")
                 raise Exception(error_msg)
                 
             elif len(records) > 1:
@@ -244,8 +253,8 @@ def get_record_before_delete(conn, table_name: str, pipeline_id: str, logger: Cu
                     f"Multiple records found for deletion - data integrity issue - PIPELINE_ID: {pipeline_id}",
                     keyword="DELETE_MULTIPLE_RECORDS_FOUND",
                     other_details={
-                        "pipeline_id": f"value: {pipeline_id} | datatype: {type(pipeline_id)}",
-                        "table_name": f"value: {table_name} | datatype: {type(table_name)}",
+                        "pipeline_id": pipeline_id,
+                        "table_name": table_name,
                         "query_id": cursor.sfqid,
                         "records_found": len(records),
                         "duplicate_records": records,
@@ -280,10 +289,9 @@ def get_record_before_delete(conn, table_name: str, pipeline_id: str, logger: Cu
             f"Failed to fetch record before deletion - PIPELINE_ID: {pipeline_id}: {str(e)}",
             keyword="FETCH_BEFORE_DELETE_FAILED",
             other_details={
-                "exception_type": str(type(e)),
                 "exception_message": str(e),
-                "pipeline_id": f"value: {pipeline_id} | datatype: {type(pipeline_id)}",
-                "table_name": f"value: {table_name} | datatype: {type(table_name)}",
+                "pipeline_id": pipeline_id,
+                "table_name": table_name,
                 "select_query": select_query
             }
         )
@@ -294,8 +302,8 @@ def get_record_before_delete(conn, table_name: str, pipeline_id: str, logger: Cu
 def execute_delete_query(conn, table_name: str, pipeline_id: str, logger: CustomLogger) -> str:
     """Execute DELETE query and return query ID."""
     print(f"DEBUG: execute_delete_query() called")
-    print(f"DEBUG: table_name: {table_name} | datatype: {type(table_name)}")
-    print(f"DEBUG: pipeline_id: {pipeline_id} | datatype: {type(pipeline_id)}")
+    print(f"DEBUG: table_name: {table_name} ")
+    print(f"DEBUG: pipeline_id: {pipeline_id}")
     
     # SAFETY: Get and log the record before deletion
     record_to_delete = get_record_before_delete(conn, table_name, pipeline_id, logger)
@@ -320,8 +328,8 @@ def execute_delete_query(conn, table_name: str, pipeline_id: str, logger: Custom
                     other_details={
                         "expected_rows": 1,
                         "actual_rows_affected": delete_rows_affected,
-                        "pipeline_id": f"value: {pipeline_id} | datatype: {type(pipeline_id)}",
-                        "table_name": f"value: {table_name} | datatype: {type(table_name)}",
+                        "pipeline_id": f"value: {pipeline_id}",
+                        "table_name": f"value: {table_name} ",
                         "query_id": delete_query_id,
                         "delete_query": delete_query
                     }
@@ -345,8 +353,8 @@ def execute_delete_query(conn, table_name: str, pipeline_id: str, logger: Custom
             other_details={
                 "exception_type": str(type(e)),
                 "exception_message": str(e),
-                "pipeline_id": f"value: {pipeline_id} | datatype: {type(pipeline_id)}",
-                "table_name": f"value: {table_name} | datatype: {type(table_name)}",
+                "pipeline_id": f"value: {pipeline_id}",
+                "table_name": f"value: {table_name} ",
                 "delete_query": delete_query
             }
         )
@@ -357,13 +365,13 @@ def execute_delete_query(conn, table_name: str, pipeline_id: str, logger: Custom
 def execute_insert_query(conn, table_name: str, record_data: Dict[str, Any], logger: CustomLogger) -> str:
     """Execute INSERT query and return query ID."""
     print(f"DEBUG: execute_insert_query() called")
-    print(f"DEBUG: table_name: {table_name} | datatype: {type(table_name)}")
+    print(f"DEBUG: table_name: {table_name}")
     print(f"DEBUG: record_data_fields: {len(record_data)} | datatype: {type(record_data)}")
     
     field_names = list(record_data.keys())
     pipeline_id = record_data.get('PIPELINE_ID', 'unknown')
     
-    print(f"DEBUG: pipeline_id: {pipeline_id} | datatype: {type(pipeline_id)}")
+    print(f"DEBUG: pipeline_id: {pipeline_id}")
     
     placeholders = [f"%({field})s" for field in field_names]
     insert_query = f"""
@@ -390,8 +398,8 @@ def execute_insert_query(conn, table_name: str, record_data: Dict[str, Any], log
                     other_details={
                         "expected_rows": 1,
                         "actual_rows_affected": insert_rows_affected,
-                        "pipeline_id": f"value: {pipeline_id} | datatype: {type(pipeline_id)}",
-                        "table_name": f"value: {table_name} | datatype: {type(table_name)}",
+                        "pipeline_id": f"value: {pipeline_id}",
+                        "table_name": f"value: {table_name} ",
                         "query_id": insert_query_id,
                         "insert_query": insert_query,
                         "field_names": field_names
@@ -416,8 +424,8 @@ def execute_insert_query(conn, table_name: str, record_data: Dict[str, Any], log
             other_details={
                 "exception_type": str(type(e)),
                 "exception_message": str(e),
-                "pipeline_id": f"value: {pipeline_id} | datatype: {type(pipeline_id)}",
-                "table_name": f"value: {table_name} | datatype: {type(table_name)}",
+                "pipeline_id": f"value: {pipeline_id}",
+                "table_name": f"value: {table_name} ",
                 "insert_query": insert_query,
                 "field_names": field_names,
                 "record_data_sample": {k: f"value: {v} | datatype: {type(v)}" for k, v in list(record_data.items())[:5]}  # First 5 fields only
@@ -430,8 +438,8 @@ def execute_insert_query(conn, table_name: str, record_data: Dict[str, Any], log
 def delete_single_record_from_snowflake(pipeline_id: str, config: Dict[str, Any], logger: CustomLogger) -> str:
     """Deletes a single record from Snowflake table."""
     print(f"DEBUG: delete_single_record_from_snowflake() called")
-    print(f"DEBUG: pipeline_id: {pipeline_id} | datatype: {type(pipeline_id)}")
-    print(f"DEBUG: config: {type(config)}")
+    print(f"DEBUG: pipeline_id: {pipeline_id}")
+    # #  print(f"DEBUG: config: {type(config)}")
     
     validate_config_structure(config)
     validated_pipeline_id = validate_pipeline_id(pipeline_id)
@@ -448,7 +456,7 @@ def delete_single_record_from_snowflake(pipeline_id: str, config: Dict[str, Any]
 def insert_single_record_to_snowflake(record_data: Dict[str, Any], config: Dict[str, Any], logger: CustomLogger) -> str:
     """Inserts a single record into Snowflake table."""
     print(f"DEBUG: insert_single_record_to_snowflake() called")
-    print(f"DEBUG: record_data: {type(record_data)} | config: {type(config)}")
+    print(f"""DEBUG: record_data: \n {record_data}""")
     
     validate_config_structure(config)
     
@@ -458,7 +466,8 @@ def insert_single_record_to_snowflake(record_data: Dict[str, Any], config: Dict[
         raise ValueError(error_msg)
     
     pipeline_id = record_data.get('PIPELINE_ID')
-    print(f"DEBUG: extracted_pipeline_id: {pipeline_id} | datatype: {type(pipeline_id)}")
+    print(f"DEBUG: inserting record \n {json.dumps(record_data, indent=4)}")
+    print(f"DEBUG: extracted_pipeline_id: {pipeline_id}")
     
     validate_pipeline_id(pipeline_id)
     
@@ -474,14 +483,14 @@ def insert_single_record_to_snowflake(record_data: Dict[str, Any], config: Dict[
 def validate_record_pair(original_record: Dict[str, Any], updated_record: Dict[str, Any]) -> str:
     """Validate that both records have matching PIPELINE_IDs and return validated ID."""
     print(f"DEBUG: validate_record_pair() called")
-    print(f"DEBUG: original_record: {type(original_record)} | updated_record: {type(updated_record)}")
+    print(f"DEBUG: original_record: {type(original_record)}")
     
     original_id = original_record.get('PIPELINE_ID')
     updated_id = updated_record.get('PIPELINE_ID')
-    
-    print(f"DEBUG: original_id: {original_id} | datatype: {type(original_id)}")
-    print(f"DEBUG: updated_id: {updated_id} | datatype: {type(updated_id)}")
-    
+
+    print(f"DEBUG: original_id: {original_id}")
+    print(f"DEBUG: updated_id: {updated_id}")
+
     validated_original = validate_pipeline_id(original_id)
     validated_updated = validate_pipeline_id(updated_id)
     
@@ -498,9 +507,9 @@ def validate_record_pair(original_record: Dict[str, Any], updated_record: Dict[s
 def execute_transaction(conn, table_name: str, pipeline_id: str, updated_record: Dict[str, Any], logger: CustomLogger) -> tuple[str, str]:
     """Execute DELETE and INSERT in a transaction."""
     print(f"DEBUG: execute_transaction() called")
-    print(f"DEBUG: table_name: {table_name} | datatype: {type(table_name)}")
-    print(f"DEBUG: pipeline_id: {pipeline_id} | datatype: {type(pipeline_id)}")
-    print(f"DEBUG: updated_record: {type(updated_record)}")
+    print(f"DEBUG: table_name: {table_name}")
+    print(f"DEBUG: pipeline_id: {pipeline_id}")
+    print(f"DEBUG: updated_record: {json.dumps(updated_record, indent=4)}")
     
     # Start transaction
     conn.autocommit = False
@@ -522,7 +531,14 @@ def execute_transaction(conn, table_name: str, pipeline_id: str, updated_record:
         
         logger.info(
             f"Transaction committed successfully for PIPELINE_ID: {pipeline_id}",
-            keyword="DELETE_INSERT_TRANSACTION_SUCCESS"
+            keyword="DELETE_INSERT_TRANSACTION_SUCCESS",
+            other_details={
+                        "pipeline_id": f"value: {pipeline_id}",
+                        "table_name": f"value: {table_name} ",
+                        "delete_query_id": delete_query_id,
+                        "insert_query_id": insert_query_id,
+                        "updated_record" : json.dumps(updated_record, indent=4)
+                    }
         )
         
         return (delete_query_id, insert_query_id)
@@ -541,10 +557,13 @@ def execute_transaction(conn, table_name: str, pipeline_id: str, updated_record:
                 f"Failed to rollback transaction for PIPELINE_ID: {pipeline_id}: {str(rollback_error)}",
                 keyword="ROLLBACK_FAILED",
                 other_details={
-                    "original_exception": f"value: {str(e)} | datatype: {type(e)}",
-                    "rollback_exception": f"value: {str(rollback_error)} | datatype: {type(rollback_error)}",
-                    "pipeline_id": f"value: {pipeline_id} | datatype: {type(pipeline_id)}",
-                    "table_name": f"value: {table_name} | datatype: {type(table_name)}"
+                    "original_exception": f"value: {str(e)}",
+                    "rollback_exception": f"value: {str(rollback_error)}",
+                    "pipeline_id": f"value: {pipeline_id}",
+                    "table_name": f"value: {table_name} ",
+                    "delete_query_id": delete_query_id,
+                    "insert_query_id": insert_query_id,
+                    "updated_record" : json.dumps(updated_record, indent=4)
                 }
             )
             print(f"DEBUG: Rollback failed - exception: {str(rollback_error)} | datatype: {type(rollback_error)}")
@@ -560,10 +579,10 @@ def delete_old_in_process_record_and_insert_new_pending_record(
 ) -> None:
     """Deletes an old in-process record and inserts a new pending record in a transaction."""
     print(f"DEBUG: delete_old_in_process_record_and_insert_new_pending_record() called")
-    print(f"DEBUG: original_stale_record: {type(original_stale_record)}")
-    print(f"DEBUG: updated_stale_record: {type(updated_stale_record)}")
-    print(f"DEBUG: config: {type(config)}")
-    
+    print(f"DEBUG: original_stale_record: {json.dumps(original_stale_record, indent=4)} \n")
+    print(f"DEBUG: updated_stale_record: {json.dumps(updated_stale_record, indent=4)} \n")
+    # print(f"DEBUG: config: {json.dumps(config, indent=4)}")
+
     validate_config_structure(config)
     pipeline_id = validate_record_pair(original_stale_record, updated_stale_record)
     
@@ -583,15 +602,13 @@ def delete_old_in_process_record_and_insert_new_pending_record(
             f"DELETE and INSERT operation failed for PIPELINE_ID: {pipeline_id}: {str(e)}",
             keyword="DELETE_INSERT_RECORD_FAILED",
             other_details={
-                "exception_type": str(type(e)),
                 "exception_message": str(e),
-                "pipeline_id": f"value: {pipeline_id} | datatype: {type(pipeline_id)}",
-                "table_name": f"value: {table_name} | datatype: {type(table_name)}",
-                "original_record_fields": len(original_stale_record),
-                "updated_record_fields": len(updated_stale_record)
+                "pipeline_id": f"value: {pipeline_id}",
+                "table_name": f"value: {table_name}",
+                "original_record_fields": json.dumps(original_stale_record, indent=4),
+                "updated_record_fields": json.dumps(updated_stale_record, indent=4)
             }
         )
-        print(f"DEBUG: delete_old_in_process_record_and_insert_new_pending_record failed - exception: {str(e)} | datatype: {type(e)}")
         raise
 
 
@@ -617,7 +634,7 @@ def update_in_process_single_record_to_pending_record(stale_record: Dict[str, An
     pipeline_status = stale_record.get('PIPELINE_STATUS')
     retry_attempt = stale_record.get('RETRY_ATTEMPT_NUMBER')
     
-    print(f"DEBUG: pipeline_id: {pipeline_id} | datatype: {type(pipeline_id)}")
+    print(f"DEBUG: pipeline_id: {pipeline_id}")
     print(f"DEBUG: pipeline_status: {pipeline_status} | datatype: {type(pipeline_status)}")
     print(f"DEBUG: retry_attempt: {retry_attempt} | datatype: {type(retry_attempt)}")
     
