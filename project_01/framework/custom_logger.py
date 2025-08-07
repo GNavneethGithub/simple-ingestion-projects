@@ -255,190 +255,190 @@ class CustomLogger:
 
 
 
-# import multiprocessing
-# # --- Example Usage ---
-# if __name__ == "__main__":
-#     # --- Global Logging Configuration (Optional but Recommended for Production) ---
-#     # It's good practice to configure the root logger or disable propagation
-#     # if you want your custom loggers to be entirely independent.
-#     # For this example, CustomLogger instances manage their own handlers,
-#     # so explicit root logger config might not be strictly needed unless
-#     # other parts of your app use the root logger.
-#     # logging.basicConfig(level=logging.WARNING) # Example: Set root logger to WARNING
+import multiprocessing
+# --- Example Usage ---
+if __name__ == "__main__":
+    # --- Global Logging Configuration (Optional but Recommended for Production) ---
+    # It's good practice to configure the root logger or disable propagation
+    # if you want your custom loggers to be entirely independent.
+    # For this example, CustomLogger instances manage their own handlers,
+    # so explicit root logger config might not be strictly needed unless
+    # other parts of your app use the root logger.
+    # logging.basicConfig(level=logging.WARNING) # Example: Set root logger to WARNING
 
-#     # --- Example 1: Main Pipeline Log with INFO level and File Output ---
-#     # Logs will go to console and 'main_pipeline.log'
-#     main_logger = CustomLogger(
-#         parent_id="main_pipeline_execution",
-#         name="main_application_logger",
-#         level=logging.INFO, # Only INFO and above will be logged by this instance
-#         log_file="main_pipeline.log"
-#     )
+    # --- Example 1: Main Pipeline Log with INFO level and File Output ---
+    # Logs will go to console and 'main_pipeline.log'
+    main_logger = CustomLogger(
+        parent_id="main_pipeline_execution",
+        name="main_application_logger",
+        level=logging.INFO, # Only INFO and above will be logged by this instance
+        log_file="main_pipeline.log"
+    )
 
-#     print("--- Example 1: Main Pipeline Log (INFO level, Console + File) ---")
-#     main_logger.info(
-#         "Application startup sequence initiated.",
-#         keyword="APP_INIT",
-#         other_details={"version": "1.0.0", "environment": "production"}
-#     )
-#     main_logger.debug(
-#         "This DEBUG message will NOT appear because logger level is INFO.",
-#         keyword="DEBUG_TEST"
-#     )
-#     main_logger.warning(
-#         "Configuration check found minor discrepancies.",
-#         keyword="CONFIG_WARN",
-#         other_details={"config_file": "app_settings.json"}
-#     )
-
-
-#     def sub_function_01(config: dict | None, parent_logger_instance: CustomLogger):
-#         """
-#         Simulates a sub-function within the main pipeline, demonstrating
-#         how to manage logging context for child operations.
-#         """
-#         print("\n--- Inside sub_function_01 ---")
-#         # Option 1: Create a new CustomLogger instance for the child context.
-#         # This is ideal when a distinct logging context (e.g., unique child_id)
-#         # is needed for a specific logical unit of work within a function.
-#         # It's crucial to provide a unique `name` to the underlying `logging.Logger`
-#         # to prevent handler duplication, especially in multiprocessing.
-#         # This child logger will also write to its own file.
-#         child_logger_for_sub_task = CustomLogger(
-#             parent_id=parent_logger_instance._instance_parent_id, # Inherit parent_id from the main logger
-#             child_id="data_ingestion_phase_01", # Assign a unique child ID for this sub-task
-#             name="sub_function_01_ingestion_logger", # Unique name for this logger instance
-#             level=logging.DEBUG, # This child logger will capture DEBUG messages
-#             log_file="sub_function_01.log"
-#         )
-#         child_logger_for_sub_task.info(
-#             keyword='DATA_INGESTION',
-#             message='Commencing data chunk processing.',
-#             other_details={"chunk_identifier": "chunk_A_001", "status": "in_progress"}
-#         )
-#         child_logger_for_sub_task.debug(
-#             "Detailed debug info during chunk processing.",
-#             keyword="CHUNK_DEBUG",
-#             other_details={"raw_data_size": 10240}
-#         )
-#         child_logger_for_sub_task.warning(
-#             "Minor data inconsistencies detected during pre-processing.",
-#             keyword="DATA_WARNING",
-#             other_details={"inconsistency_count": 2, "affected_records": [12, 45]}
-#         )
-
-#         # Option 2: Use the passed parent logger instance and override child_id
-#         # for specific log entries. This is suitable when most logs in a function
-#         # share the parent's context, but a few specific logs need a temporary
-#         # child identifier.
-#         parent_logger_instance.debug(
-#             "Debugging network connection within sub_function_01 using parent logger.",
-#             child_id="network_check_override", # Temporarily override child_id for this log
-#             keyword="NETWORK_DEBUG"
-#         ) # This debug message will NOT appear if main_logger's level is INFO
+    print("--- Example 1: Main Pipeline Log (INFO level, Console + File) ---")
+    main_logger.info(
+        "Application startup sequence initiated.",
+        keyword="APP_INIT",
+        other_details={"version": "1.0.0", "environment": "production"}
+    )
+    main_logger.debug(
+        "This DEBUG message will NOT appear because logger level is INFO.",
+        keyword="DEBUG_TEST"
+    )
+    main_logger.warning(
+        "Configuration check found minor discrepancies.",
+        keyword="CONFIG_WARN",
+        other_details={"config_file": "app_settings.json"}
+    )
 
 
-#     # Call the simulated sub-function
-#     sub_function_01(None, main_logger)
+    def sub_function_01(config: dict | None, parent_logger_instance: CustomLogger):
+        """
+        Simulates a sub-function within the main pipeline, demonstrating
+        how to manage logging context for child operations.
+        """
+        print("\n--- Inside sub_function_01 ---")
+        # Option 1: Create a new CustomLogger instance for the child context.
+        # This is ideal when a distinct logging context (e.g., unique child_id)
+        # is needed for a specific logical unit of work within a function.
+        # It's crucial to provide a unique `name` to the underlying `logging.Logger`
+        # to prevent handler duplication, especially in multiprocessing.
+        # This child logger will also write to its own file.
+        child_logger_for_sub_task = CustomLogger(
+            parent_id=parent_logger_instance._instance_parent_id, # Inherit parent_id from the main logger
+            child_id="data_ingestion_phase_01", # Assign a unique child ID for this sub-task
+            name="sub_function_01_ingestion_logger", # Unique name for this logger instance
+            level=logging.DEBUG, # This child logger will capture DEBUG messages
+            log_file="sub_function_01.log"
+        )
+        child_logger_for_sub_task.info(
+            keyword='DATA_INGESTION',
+            message='Commencing data chunk processing.',
+            other_details={"chunk_identifier": "chunk_A_001", "status": "in_progress"}
+        )
+        child_logger_for_sub_task.debug(
+            "Detailed debug info during chunk processing.",
+            keyword="CHUNK_DEBUG",
+            other_details={"raw_data_size": 10240}
+        )
+        child_logger_for_sub_task.warning(
+            "Minor data inconsistencies detected during pre-processing.",
+            keyword="DATA_WARNING",
+            other_details={"inconsistency_count": 2, "affected_records": [12, 45]}
+        )
 
-#     print("\n--- Back in Main Context ---")
-#     main_logger.info("Main pipeline execution resuming after sub-function completion.", keyword="MAIN_RESUME")
+        # Option 2: Use the passed parent logger instance and override child_id
+        # for specific log entries. This is suitable when most logs in a function
+        # share the parent's context, but a few specific logs need a temporary
+        # child identifier.
+        parent_logger_instance.debug(
+            "Debugging network connection within sub_function_01 using parent logger.",
+            child_id="network_check_override", # Temporarily override child_id for this log
+            keyword="NETWORK_DEBUG"
+        ) # This debug message will NOT appear if main_logger's level is INFO
 
-#     # --- Example 2: Standalone Child Process Logger with ERROR level ---
-#     # This logger will only show ERROR and CRITICAL messages to console.
-#     print("\n--- Example 2: Standalone Child Process Logger (ERROR level) ---")
-#     standalone_child_process_logger = CustomLogger(
-#         child_id="standalone_worker_process_XYZ",
-#         name="standalone_worker_logger",
-#         level=logging.ERROR # Only ERROR and CRITICAL will be logged
-#     )
-#     standalone_child_process_logger.info(
-#         "This INFO message will NOT appear from standalone logger.",
-#         keyword="INFO_TEST"
-#     )
-#     standalone_child_process_logger.error(
-#         "Standalone worker process encountered a critical error.",
-#         keyword="WORKER_CRITICAL_ERROR",
-#         other_details={"process_name": "data_cleaner_service", "exit_code": 1}
-#     )
-#     standalone_child_process_logger.critical(
-#         "FATAL: Standalone worker process terminated unexpectedly.",
-#         keyword="WORKER_FATAL"
-#     )
 
-#     # --- Example 3: Parallelization Testing with Multiprocessing ---
-#     print("\n--- Example 3: Parallel Processing with Custom Logging ---")
+    # Call the simulated sub-function
+    sub_function_01(None, main_logger)
 
-#     def worker_function(task_id: int, common_parent_id: str):
-#         """
-#         A function executed by a separate process, demonstrating custom logging
-#         within a multiprocessing context. Each worker creates its own logger
-#         instance to ensure proper isolation and context.
-#         """
-#         # Create a CustomLogger instance for this specific worker process.
-#         # It's crucial to give a unique name to the underlying logging.Logger
-#         # within each process to prevent handler conflicts and ensure logs are
-#         # properly captured by the process's own handlers.
-#         worker_process_logger = CustomLogger(
-#             parent_id=common_parent_id, # Inherit the parent ID from the main process
-#             child_id=f"worker_task_{task_id}_pid_{os.getpid()}", # Unique child ID including process ID
-#             name=f"worker_logger_task_{task_id}", # Unique logger name for this process
-#             level=logging.DEBUG, # Workers will log DEBUG messages
-#             log_file=f"worker_{task_id}.log" # Each worker logs to its own file
-#         )
-#         worker_process_logger.info(
-#             f"Worker {task_id} initiated processing.",
-#             keyword="WORKER_START",
-#             other_details={"assigned_data_block": f"block_{task_id}", "process_id": os.getpid()}
-#         )
-#         try:
-#             # Simulate work and potential errors within the worker
-#             if task_id % 2 == 0:
-#                 worker_process_logger.debug(
-#                     f"Worker {task_id} successfully processed even-numbered task.",
-#                     keyword="TASK_COMPLETION",
-#                     other_details={"result_size_kb": 500}
-#                 )
-#             else:
-#                 # Simulate an error for odd-numbered tasks
-#                 raise ValueError(f"Simulated processing error for task {task_id}")
-#         except ValueError as e:
-#             worker_process_logger.error(
-#                 f"Worker {task_id} failed to complete its assigned task.",
-#                 keyword="WORKER_TASK_FAILURE",
-#                 other_details={"exception_type": type(e).__name__, "error_message": str(e)}
-#             )
-#         finally:
-#             worker_process_logger.info(
-#                 f"Worker {task_id} concluded execution.",
-#                 keyword="WORKER_END"
-#             )
+    print("\n--- Back in Main Context ---")
+    main_logger.info("Main pipeline execution resuming after sub-function completion.", keyword="MAIN_RESUME")
 
-#     # Define the number of parallel processes to spawn
-#     number_of_processes = 3
-#     active_processes = []
+    # --- Example 2: Standalone Child Process Logger with ERROR level ---
+    # This logger will only show ERROR and CRITICAL messages to console.
+    print("\n--- Example 2: Standalone Child Process Logger (ERROR level) ---")
+    standalone_child_process_logger = CustomLogger(
+        child_id="standalone_worker_process_XYZ",
+        name="standalone_worker_logger",
+        level=logging.ERROR # Only ERROR and CRITICAL will be logged
+    )
+    standalone_child_process_logger.info(
+        "This INFO message will NOT appear from standalone logger.",
+        keyword="INFO_TEST"
+    )
+    standalone_child_process_logger.error(
+        "Standalone worker process encountered a critical error.",
+        keyword="WORKER_CRITICAL_ERROR",
+        other_details={"process_name": "data_cleaner_service", "exit_code": 1}
+    )
+    standalone_child_process_logger.critical(
+        "FATAL: Standalone worker process terminated unexpectedly.",
+        keyword="WORKER_FATAL"
+    )
 
-#     # Create and start worker processes
-#     for i in range(number_of_processes):
-#         process = multiprocessing.Process(
-#             target=worker_function,
-#             args=(i + 1, main_logger._instance_parent_id) # Pass parent ID to workers
-#         )
-#         active_processes.append(process)
-#         process.start()
+    # --- Example 3: Parallelization Testing with Multiprocessing ---
+    print("\n--- Example 3: Parallel Processing with Custom Logging ---")
 
-#     # Wait for all child processes to complete their execution
-#     for process in active_processes:
-#         process.join()
+    def worker_function(task_id: int, common_parent_id: str):
+        """
+        A function executed by a separate process, demonstrating custom logging
+        within a multiprocessing context. Each worker creates its own logger
+        instance to ensure proper isolation and context.
+        """
+        # Create a CustomLogger instance for this specific worker process.
+        # It's crucial to give a unique name to the underlying logging.Logger
+        # within each process to prevent handler conflicts and ensure logs are
+        # properly captured by the process's own handlers.
+        worker_process_logger = CustomLogger(
+            parent_id=common_parent_id, # Inherit the parent ID from the main process
+            child_id=f"worker_task_{task_id}_pid_{os.getpid()}", # Unique child ID including process ID
+            name=f"worker_logger_task_{task_id}", # Unique logger name for this process
+            level=logging.DEBUG, # Workers will log DEBUG messages
+            log_file=f"worker_{task_id}.log" # Each worker logs to its own file
+        )
+        worker_process_logger.info(
+            f"Worker {task_id} initiated processing.",
+            keyword="WORKER_START",
+            other_details={"assigned_data_block": f"block_{task_id}", "process_id": os.getpid()}
+        )
+        try:
+            # Simulate work and potential errors within the worker
+            if task_id % 2 == 0:
+                worker_process_logger.debug(
+                    f"Worker {task_id} successfully processed even-numbered task.",
+                    keyword="TASK_COMPLETION",
+                    other_details={"result_size_kb": 500}
+                )
+            else:
+                # Simulate an error for odd-numbered tasks
+                raise ValueError(f"Simulated processing error for task {task_id}")
+        except ValueError as e:
+            worker_process_logger.error(
+                f"Worker {task_id} failed to complete its assigned task.",
+                keyword="WORKER_TASK_FAILURE",
+                other_details={"exception_type": type(e).__name__, "error_message": str(e)}
+            )
+        finally:
+            worker_process_logger.info(
+                f"Worker {task_id} concluded execution.",
+                keyword="WORKER_END"
+            )
 
-#     main_logger.info("All parallel worker processes have successfully completed.", keyword="PARALLEL_EXECUTION_DONE")
+    # Define the number of parallel processes to spawn
+    number_of_processes = 3
+    active_processes = []
 
-#     # Clean up generated log files (optional, for demonstration purposes)
-#     print("\n--- Cleaning up generated log files ---")
-#     for filename in ["main_pipeline.log", "sub_function_01.log", "worker_1.log", "worker_2.log", "worker_3.log"]:
-#         if os.path.exists(filename):
-#             os.remove(filename)
-#             print(f"Removed {filename}")
+    # Create and start worker processes
+    for i in range(number_of_processes):
+        process = multiprocessing.Process(
+            target=worker_function,
+            args=(i + 1, main_logger._instance_parent_id) # Pass parent ID to workers
+        )
+        active_processes.append(process)
+        process.start()
+
+    # Wait for all child processes to complete their execution
+    for process in active_processes:
+        process.join()
+
+    main_logger.info("All parallel worker processes have successfully completed.", keyword="PARALLEL_EXECUTION_DONE")
+
+    # Clean up generated log files (optional, for demonstration purposes)
+    print("\n--- Cleaning up generated log files ---")
+    for filename in ["main_pipeline.log", "sub_function_01.log", "worker_1.log", "worker_2.log", "worker_3.log"]:
+        if os.path.exists(filename):
+            os.remove(filename)
+            print(f"Removed {filename}")
 
 
 

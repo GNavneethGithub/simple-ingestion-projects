@@ -11,21 +11,45 @@ from snowflake.connector import DictCursor
 from custom_logger import CustomLogger
 
 
-def validate_sf_config(sf_config: Dict[str, Any]) -> None:
-    """Validate Snowflake configuration has all required keys."""
-    print(f"DEBUG: validate_sf_config() called with sf_config: {type(sf_config)}")
-    
+def validate_sf_config(sf_config: Dict[str, Any], logger: CustomLogger) -> None:
+    """
+    Validate Snowflake configuration has all required keys.
+    The logger instance is passed as an argument.
+    """
+    # Define a consistent keyword for all logs within this function
+    KEYWORD_SF_CONFIG_VALIDATION = "SF_CONFIG_VALIDATION"
+
+    # Log the start of the validation process using the defined keyword.
+    logger.debug(
+        message="Starting Snowflake configuration validation.",
+        keyword=KEYWORD_SF_CONFIG_VALIDATION,
+        other_details={"input_config_type": type(sf_config).__name__, "config_keys": list(sf_config.keys())}
+    )
+
     required_keys = ['account', 'user', 'password', 'warehouse', 'database', 'schema', 'table']
     missing_keys = [key for key in required_keys if key not in sf_config]
     
-    print(f"DEBUG: missing_keys: {missing_keys} | datatype: {type(missing_keys)}")
+    # This print statement is for quick, interactive debugging.
+    # It will not be part of the final, structured log output.
+    print(f"DEBUG: missing_keys found: {missing_keys}")
     
     if missing_keys:
         error_msg = f"Missing required sf_config keys: {missing_keys}"
-        print(f"DEBUG: Validation failed - {error_msg}")
+        
+        # Log the failure as an error, using the keyword.
+        logger.error(
+            message=error_msg,
+            keyword=KEYWORD_SF_CONFIG_VALIDATION,
+            other_details={"validation_status": "FAILED", "missing_keys": missing_keys}
+        )
         raise ValueError(error_msg)
-    
-    print(f"DEBUG: sf_config validation passed")
+
+    # Log success with the keyword.
+    logger.info(
+        message="Snowflake configuration validation passed successfully.",
+        keyword=KEYWORD_SF_CONFIG_VALIDATION,
+        other_details={"validation_status": "SUCCESS", "validated_keys": required_keys}
+    )
 
 
 def validate_pipeline_id(pipeline_id: Optional[str]) -> str:
@@ -79,17 +103,28 @@ def validate_config_structure(config: Dict[str, Any]) -> None:
     print(f"DEBUG: Config structure validation passed")
 
 
+
 @contextmanager
 def get_snowflake_connection(sf_config: Dict[str, Any], logger: CustomLogger):
-    """Context manager for Snowflake connections with automatic cleanup."""
-    print(f"DEBUG: get_snowflake_connection() called")
-    
-    validate_sf_config(sf_config)
-    
+    """
+    Context manager for Snowflake connections with automatic cleanup.
+    The logger instance is passed as an argument.
+    """
+    KEYWORD_SF_CONNECTION = "SF_CONNECTION"
     conn = None
+
     try:
-        print(f"DEBUG: Attempting Snowflake connection...")
-        
+        # Log the attempt to establish a connection
+        logger.info(
+            message="Attempting to establish Snowflake connection.",
+            keyword=KEYWORD_SF_CONNECTION,
+            other_details={
+                "account": sf_config.get('account'),
+                "database": sf_config.get('database'),
+                "schema": sf_config.get('schema')
+            }
+        )
+
         conn = snowflake.connector.connect(
             account=sf_config['account'],
             user=sf_config['user'],
@@ -99,39 +134,57 @@ def get_snowflake_connection(sf_config: Dict[str, Any], logger: CustomLogger):
             schema=sf_config['schema']
         )
         
-        print(f"DEBUG: Connection established to {sf_config['database']}.{sf_config['schema']}")
+        # Log successful connection
         logger.info(
-            "Snowflake connection established successfully",
-            keyword="SNOWFLAKE_CONNECTION_SUCCESS"
+            message=f"Snowflake connection established successfully to {sf_config['database']}.{sf_config['schema']}",
+            keyword=KEYWORD_SF_CONNECTION,
+            other_details={"status": "SUCCESS"}
         )
         
         yield conn
         
     except Exception as e:
-        # CRITICAL ERROR - Log extensive connection details
+        # Prepare a safe configuration dictionary to log, redacting sensitive information
         safe_config = {k: v for k, v in sf_config.items() if k != 'password'}
         safe_config['password'] = '[REDACTED]'
         
+        # Log the connection failure with comprehensive details, including the full config for debugging
         logger.error(
-            f"Failed to establish Snowflake connection: {str(e)}",
-            keyword="SNOWFLAKE_CONNECTION_FAILED",
+            message=f"Failed to establish Snowflake connection: {e}",
+            keyword=KEYWORD_SF_CONNECTION,
             other_details={
-                "exception_type": str(type(e)),
+                "status": "FAILED",
+                "exception_type": type(e).__name__,
                 "exception_message": str(e),
-                "sf_config": {k: f"value: {v} | datatype: {type(v)}" for k, v in safe_config.items()},
-                "connection_attempt_details": f"account: {sf_config.get('account')} | database: {sf_config.get('database')} | schema: {sf_config.get('schema')}"
+                "provided_config": safe_config
             }
         )
-        print(f"DEBUG: Connection failed - exception: {str(e)} | datatype: {type(e)}")
+        # Add a print statement for quick, non-formatted debugging if needed
+        print(f"DEBUG: Connection failed - exception: {str(e)}")
         raise
         
     finally:
         if conn:
             try:
                 conn.close()
-                print(f"DEBUG: Connection closed successfully")
+                # Log successful connection closure
+                logger.info(
+                    message="Snowflake connection closed successfully.",
+                    keyword=KEYWORD_SF_CONNECTION,
+                    other_details={"status": "CLOSED"}
+                )
             except Exception as e:
-                print(f"DEBUG: Error closing connection: {str(e)} | datatype: {type(e)}")
+                # Log any errors that occur during connection closure
+                logger.error(
+                    message=f"Error while closing Snowflake connection: {e}",
+                    keyword=KEYWORD_SF_CONNECTION,
+                    other_details={
+                        "status": "CLOSE_FAILED",
+                        "exception_type": type(e).__name__,
+                        "exception_message": str(e)
+                    }
+                )
+
 
 
 def find_in_process_records(config: Dict[str, Any], logger: CustomLogger) -> List[Dict[str, Any]]:

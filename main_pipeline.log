@@ -1,0 +1,41 @@
+-----------------------------------------------------------------------
+[APP_INIT] INFO
+Parent ID: main_pipeline_execution | Child ID: N/A
+Log Time: 2025-08-07 16:09:15.324 | Caller: custom_logger.py:279
+Message:
+Application startup sequence initiated.
+Other Details:
+{
+    "version": "1.0.0",
+    "environment": "production"
+}
+-----------------------------------------------------------------------
+
+-----------------------------------------------------------------------
+[CONFIG_WARN] WARNING
+Parent ID: main_pipeline_execution | Child ID: N/A
+Log Time: 2025-08-07 16:09:15.325 | Caller: custom_logger.py:288
+Message:
+Configuration check found minor discrepancies.
+Other Details:
+{
+    "config_file": "app_settings.json"
+}
+-----------------------------------------------------------------------
+
+-----------------------------------------------------------------------
+[MAIN_RESUME] INFO
+Parent ID: main_pipeline_execution | Child ID: N/A
+Log Time: 2025-08-07 16:09:15.368 | Caller: custom_logger.py:345
+Message:
+Main pipeline execution resuming after sub-function completion.
+-----------------------------------------------------------------------
+
+-----------------------------------------------------------------------
+[PARALLEL_EXECUTION_DONE] INFO
+Parent ID: main_pipeline_execution | Child ID: N/A
+Log Time: 2025-08-07 16:09:15.503 | Caller: custom_logger.py:434
+Message:
+All parallel worker processes have successfully completed.
+-----------------------------------------------------------------------
+

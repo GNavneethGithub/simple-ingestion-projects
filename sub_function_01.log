@@ -1,0 +1,41 @@
+-----------------------------------------------------------------------
+[DATA_INGESTION] INFO
+Parent ID: main_pipeline_execution | Child ID: data_ingestion_phase_01
+Log Time: 2025-08-07 16:09:15.365 | Caller: custom_logger.py:314
+Message:
+Commencing data chunk processing.
+Other Details:
+{
+    "chunk_identifier": "chunk_A_001",
+    "status": "in_progress"
+}
+-----------------------------------------------------------------------
+
+-----------------------------------------------------------------------
+[CHUNK_DEBUG] DEBUG
+Parent ID: main_pipeline_execution | Child ID: data_ingestion_phase_01
+Log Time: 2025-08-07 16:09:15.366 | Caller: custom_logger.py:319
+Message:
+Detailed debug info during chunk processing.
+Other Details:
+{
+    "raw_data_size": 10240
+}
+-----------------------------------------------------------------------
+
+-----------------------------------------------------------------------
+[DATA_WARNING] WARNING
+Parent ID: main_pipeline_execution | Child ID: data_ingestion_phase_01
+Log Time: 2025-08-07 16:09:15.367 | Caller: custom_logger.py:324
+Message:
+Minor data inconsistencies detected during pre-processing.
+Other Details:
+{
+    "inconsistency_count": 2,
+    "affected_records": [
+        12,
+        45
+    ]
+}
+-----------------------------------------------------------------------
+
